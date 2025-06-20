@@ -1,0 +1,12 @@
+# --- FastAPI Framework ---
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# --- Database & ORM ---
+sqlmodel==0.0.18
+psycopg[binary]==3.1.18 # Driver moderno para PostgreSQL, funciona bem com async
+alembic==1.13.1
+
+# --- Testing ---
+pytest==8.2.2
+httpx==0.27.0 # Para fazer requisições nos testes

@@ -1,0 +1,65 @@
+# A linha 'version' foi removida por ser obsoleta no Docker Compose V2.
+
+services:
+  # --- BANCO DE DADOS POSTGRESQL ---
+  postgres_db:
+    image: postgres:15-alpine
+    platform: linux/arm64 # Especifica a plataforma para compatibilidade com Apple Silicon
+    container_name: isi-postgres-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: isidb
+    ports:
+      - "5432:5432" # Mapeia a porta do container para a porta do seu Mac
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - isi_network
+
+  # --- MICROSSERVIÇO DE PRODUTOS ---
+  products_service:
+    build:
+      context: ./backend/services/products_service
+      dockerfile: Dockerfile
+    platform: linux/arm64 # Especifica a plataforma
+    container_name: isi-products-service
+    # CORREÇÃO: O comando agora aponta para 'main:app' pois 'main.py' está na raiz do WORKDIR.
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+    volumes:
+      - ./backend/services/products_service/app:/app # Volume para hot-reload
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: "postgresql+psycopg://user:password@postgres_db/isidb"
+    depends_on:
+      - postgres_db # Garante que o DB inicie antes do serviço
+    networks:
+      - isi_network
+
+  # --- APLICAÇÃO FRONTEND ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    platform: linux/arm64 # Especifica a plataforma
+    container_name: isi-frontend
+    volumes:
+      - ./frontend:/app # Volume para hot-reload
+      - /app/node_modules # Impede que o node_modules local sobrescreva o do contêiner
+    ports:
+      - "5173:5173"
+    depends_on:
+      - products_service
+    networks:
+      - isi_network
+    stdin_open: true # Necessário para o modo interativo do Vite
+    tty: true
+
+# --- VOLUMES E REDES ---
+volumes:
+  postgres_data: # Volume nomeado para persistir os dados do banco
+
+networks:
+  isi_network: # Rede customizada para os contêineres se comunicarem
+    driver: bridge
