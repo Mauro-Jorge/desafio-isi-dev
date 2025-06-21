@@ -5,12 +5,10 @@ from datetime import datetime
 from decimal import Decimal
 from sqlmodel import SQLModel
 
-# Novo schema para detalhar o desconto que será exibido na API
 class DiscountDetails(SQLModel):
     type: str
     value: Decimal
 
-# Schema de criação/atualização usa Decimal para o preço
 class ProductCreate(SQLModel):
     name: str
     description: Optional[str] = None
@@ -23,19 +21,20 @@ class ProductUpdate(SQLModel):
     price: Optional[Decimal] = None
     stock: Optional[int] = None
 
-# Schema de leitura é o mais modificado, para mostrar os novos campos calculados
 class ProductRead(SQLModel):
     id: int
     name: str
     description: Optional[str] = None
-    price: Decimal          # Preço original
+    price: Decimal
     stock: int
     created_at: datetime
     is_out_of_stock: bool
-    final_price: Decimal    # Preço com desconto, que será calculado
-    discount: Optional[DiscountDetails] = None # Detalhes do desconto, se houver
+    final_price: Decimal
+    discount: Optional[DiscountDetails] = None
+    # CORREÇÃO: Adicionamos o campo que faltava
+    deleted_at: Optional[datetime] = None
 
-# Schemas de paginação
+# ... (O resto do arquivo - PaginatedMetadata e ProductPage - continua igual)
 class PaginatedMetadata(SQLModel):
     page: int
     limit: int
