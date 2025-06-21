@@ -3,29 +3,30 @@ from sqlmodel import SQLModel
 
 # Importações dos módulos locais
 from core.database import engine
-from api.routes import products
+# ALTERAÇÃO 1: Importa o novo roteador de cupons junto com o de produtos
+from api.routes import products, coupons
 
 # --- IMPORTAÇÃO DOS MODELOS PARA CRIAÇÃO DAS TABELAS ---
-# Ao importar os modelos aqui, garantimos que o SQLModel "saiba" da existência
-# deles quando chamarmos a função 'create_all'.
 from models.product_model import Product
 from models.coupon_model import Coupon
 
 
 def create_db_and_tables():
     """
-    Cria as tabelas 'product' e 'coupon' no banco de dados se elas não existirem.
+    Cria as tabelas no banco de dados se elas não existirem.
     """
     SQLModel.metadata.create_all(engine)
 
 
 app = FastAPI(
     title="Products Service",
-    on_startup=[create_db_and_tables], # Executa a função na inicialização
+    on_startup=[create_db_and_tables],
 )
 
-# Inclui as rotas do módulo de produtos
+# Registra os roteadores na aplicação principal
 app.include_router(products.router, prefix="/api/v1")
+# ALTERAÇÃO 2: Registra o novo roteador de cupons
+app.include_router(coupons.router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():
