@@ -1,4 +1,6 @@
 // Em: src/App.jsx
+
+import React from 'react'; // <-- A LINHA QUE FALTAVA
 import { useQuery } from '@tanstack/react-query';
 import { api } from './lib/api';
 
@@ -27,6 +29,11 @@ function App() {
   // Se der erro na busca, mostre a mensagem de erro
   if (error) {
     return <div>Ocorreu um erro ao buscar os produtos: {error.message}</div>;
+  }
+
+  // Se a busca for bem-sucedida, mas não houver dados (ex: API retornou vazio)
+  if (!productPage || !productPage.data) {
+    return <div>Nenhum dado de produto recebido. Você já cadastrou produtos no backend?</div>
   }
 
   return (
