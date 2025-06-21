@@ -1,31 +1,40 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware # Importa o middleware de CORS
 from sqlmodel import SQLModel
 
-# Importações dos módulos locais
 from core.database import engine
-# ALTERAÇÃO 1: Importa o novo roteador de cupons junto com o de produtos
 from api.routes import products, coupons
-
-# --- IMPORTAÇÃO DOS MODELOS PARA CRIAÇÃO DAS TABELAS ---
 from models.product_model import Product
 from models.coupon_model import Coupon
 
-
 def create_db_and_tables():
-    """
-    Cria as tabelas no banco de dados se elas não existirem.
-    """
     SQLModel.metadata.create_all(engine)
-
 
 app = FastAPI(
     title="Products Service",
     on_startup=[create_db_and_tables],
 )
 
-# Registra os roteadores na aplicação principal
+# --- INÍCIO DA CONFIGURAÇÃO DO CORS ---
+
+# Lista de origens que têm permissão para fazer requisições à nossa API
+origins = [
+    "http://localhost:5173", # Endereço do nosso frontend em desenvolvimento
+    # Você poderia adicionar outros endereços aqui, como o da aplicação em produção
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,        # Permite as origens listadas
+    allow_credentials=True,       # Permite cookies (se usarmos no futuro)
+    allow_methods=["*"],          # Permite todos os métodos (GET, POST, etc.)
+    allow_headers=["*"],          # Permite todos os cabeçalhos
+)
+# --- FIM DA CONFIGURAÇÃO DO CORS ---
+
+
+# O resto da aplicação continua como estava
 app.include_router(products.router, prefix="/api/v1")
-# ALTERAÇÃO 2: Registra o novo roteador de cupons
 app.include_router(coupons.router, prefix="/api/v1")
 
 @app.get("/")
