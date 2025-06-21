@@ -1,4 +1,4 @@
-# Em api/routes/products.py (Versão com Aplicação de Cupom)
+# Em api/routes/products.py (Versão Final com toda a lógica de Descontos)
 
 import math
 from typing import List
@@ -11,7 +11,6 @@ from sqlmodel import Session, select, func
 
 from core.database import get_session
 from core.utils import map_product_to_read_schema
-# Precisamos dos modelos de Produto e Cupom neste arquivo
 from models.product_model import Product, CouponType
 from models.coupon_model import Coupon
 from schemas.product_schemas import (
@@ -19,17 +18,17 @@ from schemas.product_schemas import (
 )
 
 # --- Schemas para os corpos das requisições de desconto ---
-
 class PercentDiscountApply(BaseModel):
-    value: Decimal = PydanticField(..., gt=0, le=80, description="Percentual de desconto (1-80)")
+    value: Decimal = PydanticField(..., gt=0, le=80)
 
 class CouponDiscountApply(BaseModel):
-    code: str = PydanticField(..., min_length=4, max_length=20, description="Código do cupom promocional")
+    code: str = PydanticField(..., min_length=4, max_length=20)
 
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
 # --- Endpoints de CRUD e Restore (sem alterações) ---
+# ... (as rotas POST, GET/{id}, PATCH, DELETE/{id}, POST/{id}/restore continuam aqui)
 @router.post("/", response_model=ProductRead, status_code=201)
 def create_product(*, session: Session = Depends(get_session), product: ProductCreate):
     db_product = Product.from_orm(product)
@@ -38,7 +37,6 @@ def create_product(*, session: Session = Depends(get_session), product: ProductC
     session.refresh(db_product)
     return map_product_to_read_schema(db_product)
 
-# ... (as rotas GET, PATCH, DELETE, RESTORE continuam aqui exatamente como antes)
 @router.get("/{product_id}", response_model=ProductRead)
 def read_product(*, session: Session = Depends(get_session), product_id: int):
     product = session.get(Product, product_id)
@@ -82,23 +80,19 @@ def restore_product(*, session: Session = Depends(get_session), product_id: int)
     session.refresh(product)
     return map_product_to_read_schema(product)
 
-
 # --- Endpoints de Desconto ---
 
 @router.post("/{product_id}/discount/percent", response_model=ProductRead)
 def apply_percent_discount(*, session: Session = Depends(get_session), product_id: int, discount_payload: PercentDiscountApply):
-    """Aplica um desconto percentual direto a um produto."""
     db_product = session.get(Product, product_id)
     if not db_product or db_product.deleted_at:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     if db_product.discount_value is not None:
         raise HTTPException(status_code=409, detail="Um desconto já está ativo neste produto.")
-    
     discount_amount = (db_product.price * discount_payload.value) / 100
     final_price = db_product.price - discount_amount
     if final_price < Decimal("0.01"):
         raise HTTPException(status_code=422, detail="O desconto resulta em um preço final menor que R$ 0,01.")
-
     db_product.discount_type = CouponType.percent
     db_product.discount_value = discount_payload.value
     session.add(db_product)
@@ -106,23 +100,14 @@ def apply_percent_discount(*, session: Session = Depends(get_session), product_i
     session.refresh(db_product)
     return map_product_to_read_schema(db_product)
 
-# NOVO ENDPOINT PARA APLICAR DESCONTO VIA CUPOM
 @router.post("/{product_id}/discount/coupon", response_model=ProductRead)
-def apply_coupon_discount(
-    *,
-    session: Session = Depends(get_session),
-    product_id: int,
-    discount_payload: CouponDiscountApply
-):
-    """Aplica um cupom de desconto a um produto."""
-    # 1. Validações iniciais
+def apply_coupon_discount(*, session: Session = Depends(get_session), product_id: int, discount_payload: CouponDiscountApply):
     db_product = session.get(Product, product_id)
     if not db_product or db_product.deleted_at:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     if db_product.discount_value is not None:
         raise HTTPException(status_code=409, detail="Um desconto já está ativo neste produto.")
     
-    # 2. Busca e valida o cupom
     normalized_code = discount_payload.code.lower()
     coupon_query = select(Coupon).where(Coupon.code == normalized_code, Coupon.deleted_at == None)
     db_coupon = session.exec(coupon_query).first()
@@ -133,33 +118,52 @@ def apply_coupon_discount(
     if not (db_coupon.valid_from <= now <= db_coupon.valid_until):
         raise HTTPException(status_code=400, detail="Cupom expirado ou ainda não válido.")
         
-    # 3. Calcula o preço final e valida
     if db_coupon.type == CouponType.percent:
         discount_amount = (db_product.price * db_coupon.value) / 100
         final_price = db_product.price - discount_amount
-    else: # tipo 'fixed'
+    else:
         final_price = db_product.price - db_coupon.value
         
     if final_price < Decimal("0.01"):
         raise HTTPException(status_code=422, detail="O cupom resulta em um preço final menor que R$ 0,01.")
         
-    # 4. Aplica o desconto ao produto
     db_product.discount_type = db_coupon.type
     db_product.discount_value = db_coupon.value
-    db_product.coupon_id = db_coupon.id # Vincula o ID do cupom ao produto
+    db_product.coupon_id = db_coupon.id
     
     session.add(db_product)
     session.commit()
     session.refresh(db_product)
-    
     return map_product_to_read_schema(db_product)
 
+# --- NOVO ENDPOINT PARA REMOVER DESCONTO ---
+@router.delete("/{product_id}/discount", status_code=status.HTTP_204_NO_CONTENT)
+def remove_discount(*, session: Session = Depends(get_session), product_id: int):
+    """Remove qualquer desconto ativo de um produto."""
+    db_product = session.get(Product, product_id)
+    if not db_product or db_product.deleted_at:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+        
+    if db_product.discount_value is None:
+        # Pode-se retornar um erro 404 se preferir, mas 204 é aceitável
+        # pois o estado final desejado (sem desconto) já foi alcançado.
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-# GET / (Listagem) - Precisa ser o último para não conflitar com rotas mais específicas
+    # Limpa os campos de desconto
+    db_product.discount_type = None
+    db_product.discount_value = None
+    db_product.coupon_id = None
+    
+    session.add(db_product)
+    session.commit()
+    
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Endpoint de Listagem (deve vir por último) ---
 @router.get("/", response_model=ProductPage)
 def read_products(*, session: Session = Depends(get_session), page: int = Query(1, ge=1),
-    # ... (restante dos parâmetros da função)
+    # ... (restante dos parâmetros)
 ):
-    # (A lógica interna desta função continua a mesma)
-    # ...
-    pass # Apenas para encurtar o exemplo, a lógica completa já está no seu arquivo
+    # ... (lógica completa sem alterações)
+    pass
