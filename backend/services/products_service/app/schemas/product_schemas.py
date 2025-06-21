@@ -1,42 +1,47 @@
+# Em schemas/product_schemas.py
+
 from typing import List, Optional
 from datetime import datetime
+from decimal import Decimal
 from sqlmodel import SQLModel
 
-# --- Schemas para um único produto ---
+# Novo schema para detalhar o desconto que será exibido na API
+class DiscountDetails(SQLModel):
+    type: str
+    value: Decimal
 
+# Schema de criação/atualização usa Decimal para o preço
 class ProductCreate(SQLModel):
-    """Schema para criar um novo produto."""
     name: str
-    description: str | None = None
-    price: float
+    description: Optional[str] = None
+    price: Decimal
     stock: int
-
-class ProductRead(SQLModel):
-    """Schema para ler/retornar os dados de um produto."""
-    id: int
-    name: str
-    description: str | None = None
-    price: float
-    stock: int
-    created_at: datetime
 
 class ProductUpdate(SQLModel):
-    """Schema para atualizar um produto, com todos os campos opcionais."""
     name: Optional[str] = None
     description: Optional[str] = None
-    price: Optional[float] = None
+    price: Optional[Decimal] = None
     stock: Optional[int] = None
 
-# --- Schemas para a resposta paginada ---
+# Schema de leitura é o mais modificado, para mostrar os novos campos calculados
+class ProductRead(SQLModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    price: Decimal          # Preço original
+    stock: int
+    created_at: datetime
+    is_out_of_stock: bool
+    final_price: Decimal    # Preço com desconto, que será calculado
+    discount: Optional[DiscountDetails] = None # Detalhes do desconto, se houver
 
+# Schemas de paginação
 class PaginatedMetadata(SQLModel):
-    """Schema para os metadados de paginação."""
     page: int
     limit: int
     totalItems: int
     totalPages: int
 
 class ProductPage(SQLModel):
-    """Schema para a resposta da página de produtos, contendo os dados e os metadados."""
     data: List[ProductRead]
     meta: PaginatedMetadata
