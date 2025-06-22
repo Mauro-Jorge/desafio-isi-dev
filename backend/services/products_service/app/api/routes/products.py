@@ -1,5 +1,3 @@
-# Em api/routes/products.py (Versão Corrigida e Reorganizada)
-
 import math
 from typing import List
 from datetime import datetime
@@ -25,9 +23,8 @@ class CouponDiscountApply(BaseModel):
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
-# --- ORDEM DE ROTAS CORRIGIDA ---
+# --- ORDEM CORRETA DAS ROTAS ---
 
-# 1. Rota de Listagem GET /
 @router.get("/", response_model=ProductPage)
 def read_products(
     *, session: Session = Depends(get_session), page: int = Query(1, ge=1),
@@ -47,7 +44,6 @@ def read_products(
         query = query.where(Product.deleted_at == None)
 
     count_query = select(func.count()).select_from(query.subquery())
-    # CORREÇÃO FINAL: O método correto é .one() ou .scalar(), não .scalar_one()
     total_items = session.exec(count_query).one()
 
     sort_column = getattr(Product, sortBy, Product.created_at)
@@ -68,25 +64,44 @@ def read_products(
         meta=PaginatedMetadata(page=page, limit=limit, totalItems=total_items, totalPages=total_pages)
     )
 
-# 2. Rota de Criação POST /
 @router.post("/", response_model=ProductRead, status_code=201)
 def create_product(*, session: Session = Depends(get_session), product: ProductCreate):
-    db_product = Product.from_orm(product)
+    db_product = Product.model_validate(product)
+    try:
+        session.add(db_product)
+        session.commit()
+        session.refresh(db_product)
+        return map_product_to_read_schema(db_product)
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=409, detail=f"Produto com nome '{product.name}' já existe.")
+
+@router.post("/{product_id}/restore", response_model=ProductRead)
+def restore_product(*, session: Session = Depends(get_session), product_id: int):
+    # ... (código existente)
+    pass
+
+# ... (outras rotas como apply_discount, etc.)
+
+# ADIÇÃO DA ROTA PATCH QUE ESTAVA FALTANDO
+@router.patch("/{product_id}", response_model=ProductRead)
+def update_product(*, session: Session = Depends(get_session), product_id: int, product_update: ProductUpdate):
+    db_product = session.get(Product, product_id)
+    if not db_product or db_product.deleted_at:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+    update_data = product_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_product, key, value)
     session.add(db_product)
     session.commit()
     session.refresh(db_product)
     return map_product_to_read_schema(db_product)
 
-# 3. Rotas específicas que vêm antes da rota genérica com {id}
-# ... (aqui entrariam as rotas de restore, discount, etc.)
-# ... vou omitir para manter o foco na correção, mas elas devem estar aqui
+# ... (outras rotas como delete, etc.)
 
-# 4. Rota genérica GET /{id} por último
 @router.get("/{product_id}", response_model=ProductRead)
 def read_product(*, session: Session = Depends(get_session), product_id: int):
     product = session.get(Product, product_id)
     if not product or product.deleted_at:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     return map_product_to_read_schema(product)
-
-# ... (aqui entrariam as outras rotas PATCH, DELETE, etc.)

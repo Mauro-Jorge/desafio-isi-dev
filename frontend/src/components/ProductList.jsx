@@ -1,8 +1,10 @@
-import React, { useState } from 'react'; // Adicionamos useState
+// Em: src/components/ProductList.jsx
+
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useDebounce } from '../hooks/useDebounce';
-import { AddProductForm } from './AddProductForm'; // 1. IMPORTAMOS O NOVO COMPONENTE
+import { ProductFormModal } from './ProductFormModal';
 
 async function fetchProducts({ queryKey }) {
   const [_key, searchTerm, page] = queryKey;
@@ -21,7 +23,8 @@ async function fetchProducts({ queryKey }) {
 export function ProductList() {
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false); // 2. CRIAMOS O ESTADO PARA CONTROLAR O MODAL
+  const [isFormModalOpen, setFormModalOpen] = useState(false);
+  const [productToEdit, setProductToEdit] = useState(null);
   
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -30,6 +33,16 @@ export function ProductList() {
     queryFn: fetchProducts,
     keepPreviousData: true,
   });
+
+  const handleAddProduct = () => {
+    setProductToEdit(null);
+    setFormModalOpen(true);
+  };
+
+  const handleEditProduct = (product) => {
+    setProductToEdit(product);
+    setFormModalOpen(true);
+  };
 
   const renderStockStatus = (stock) => {
     if (stock > 0) {
@@ -56,11 +69,7 @@ export function ProductList() {
           </p>
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <button
-            type="button"
-            onClick={() => setIsAddModalOpen(true)} // 3. FAZEMOS O BOTÃO ABRIR O MODAL
-            className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-          >
+          <button onClick={handleAddProduct} type="button" className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto">
             Adicionar Produto
           </button>
         </div>
@@ -76,7 +85,7 @@ export function ProductList() {
         />
       </div>
 
-      {isFetching && <div className="text-sm text-gray-500 mt-2 animate-pulse">Atualizando lista...</div>}
+      {isFetching && !isLoading && <div className="text-sm text-gray-500 mt-2 animate-pulse">Atualizando lista...</div>}
 
       <div className="mt-8 flex flex-col">
         <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
@@ -98,6 +107,7 @@ export function ProductList() {
                     <tr><td colSpan="4" className="p-4 text-center text-gray-500">Carregando...</td></tr>
                   ) : error ? (
                     <tr><td colSpan="4" className="p-4 text-center text-red-500">Ocorreu um erro: {error.message}</td></tr>
+                  // CORREÇÃO: Verificamos se 'productPage' existe ANTES de tentar acessar 'productPage.data'
                   ) : !productPage || productPage.data.length === 0 ? (
                     <tr><td colSpan="4" className="p-4 text-center text-gray-500">Nenhum produto encontrado.</td></tr>
                   ) : (
@@ -121,9 +131,9 @@ export function ProductList() {
                           )}
                         </td>
                         <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <a href="#" className="text-indigo-600 hover:text-indigo-900">
+                          <button onClick={() => handleEditProduct(product)} className="text-indigo-600 hover:text-indigo-900">
                             Editar<span className="sr-only">, {product.name}</span>
-                          </a>
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -160,8 +170,11 @@ export function ProductList() {
         </div>
       </div>
 
-      {/* 4. RENDERIZAMOS O MODAL, PASSANDO O ESTADO E A FUNÇÃO PARA MUDÁ-LO */}
-      <AddProductForm open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
+      <ProductFormModal 
+        open={isFormModalOpen} 
+        onOpenChange={setFormModalOpen} 
+        productToEdit={productToEdit} 
+      />
     </div>
   );
 }
