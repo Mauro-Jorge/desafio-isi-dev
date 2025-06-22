@@ -1,28 +1,32 @@
-// Em: src/components/ProductFormModal.jsx
-
 import React, { useState, useEffect } from 'react';
+// 1. Importamos os hooks 'useMutation' e 'useQueryClient' do React Query
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
-import {
-  Dialog, DialogContent, DialogDescription,
-  DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from '../lib/api';
 
 // --- Nossas Funções de API ---
 
-// 1. Função para CRIAR um produto
+// 2. Função para CRIAR um produto
 async function createProduct(newProductData) {
-  const response = await api.post('/products', newProductData);
-  return response.data;
+  // Usamos .model_dump() ou .dict() no backend, então enviamos os tipos corretos
+  const payload = {
+    ...newProductData,
+    price: String(newProductData.price), // Enviando como string para a API com Decimal
+  };
+  const { data } = await api.post('/products', payload);
+  return data;
 }
 
-// 2. Função para ATUALIZAR um produto
-// Recebe um objeto com o ID do produto e os novos dados
+// 3. Função para ATUALIZAR um produto
 async function updateProduct({ id, data }) {
-  const response = await api.patch(`/products/${id}`, data);
+  const payload = {
+    ...data,
+    price: String(data.price), // Enviando como string para a API com Decimal
+  };
+  const response = await api.patch(`/products/${id}`, payload);
   return response.data;
 }
 
@@ -37,50 +41,48 @@ export function ProductFormModal({ open, onOpenChange, productToEdit }) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (productToEdit) {
+    if (productToEdit && open) {
       setName(productToEdit.name);
       setDescription(productToEdit.description || '');
-      setPrice(productToEdit.price);
-      setStock(productToEdit.stock);
-    } else {
+      setPrice(String(productToEdit.price));
+      setStock(String(productToEdit.stock));
+    } else if (!productToEdit && open) {
+      // Limpa o formulário quando abre para Adicionar
       setName('');
       setDescription('');
       setPrice('');
       setStock('');
     }
-  }, [productToEdit, open]); // Adicionado 'open' para garantir que o form limpe ao reabrir
+  }, [productToEdit, open]);
 
   // --- Nossas Mutações ---
 
+  // Função a ser chamada em caso de sucesso para ambas as mutações
   const onMutationSuccess = () => {
-    // Função a ser chamada em caso de sucesso para ambas as mutações
-    console.log('Operação bem-sucedida!');
-    queryClient.invalidateQueries(['products']);
-    onOpenChange(false);
+    // Invalida a query 'products'. Isso diz ao React Query:
+    // "Os dados de produtos estão desatualizados, busque-os novamente".
+    // Isso faz a nossa tabela se atualizar AUTOMATICAMENTE!
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+    onOpenChange(false); // Fecha o modal
   };
 
-  // 3. Mutação para CRIAR
-  const createMutation = useMutation({
+  // 4. Mutação para CRIAR
+  const { mutate: createMutate, isLoading: isCreating } = useMutation({
     mutationFn: createProduct,
     onSuccess: onMutationSuccess,
-    onError: (error) => {
-      alert(`Erro ao criar produto: ${error.response?.data?.detail || error.message}`);
-    },
+    onError: (error) => alert(`Erro ao criar produto: ${error.response?.data?.detail || error.message}`),
   });
 
-  // 4. Mutação para ATUALIZAR
-  const updateMutation = useMutation({
+  // 5. Mutação para ATUALIZAR
+  const { mutate: updateMutate, isLoading: isUpdating } = useMutation({
     mutationFn: updateProduct,
     onSuccess: onMutationSuccess,
-    onError: (error) => {
-      alert(`Erro ao editar produto: ${error.response?.data?.detail || error.message}`);
-    },
+    onError: (error) => alert(`Erro ao editar produto: ${error.response?.data?.detail || error.message}`),
   });
 
-  // 5. Lógica de Submit Inteligente
+  // 6. Lógica de Submit Inteligente
   const handleSubmit = (event) => {
     event.preventDefault();
-
     const productData = {
       name,
       description,
@@ -89,16 +91,13 @@ export function ProductFormModal({ open, onOpenChange, productToEdit }) {
     };
 
     if (isEditing) {
-      // Se estiver editando, chama a mutação de atualização
-      updateMutation.mutate({ id: productToEdit.id, data: productData });
+      updateMutate({ id: productToEdit.id, data: productData });
     } else {
-      // Senão, chama a mutação de criação
-      createMutation.mutate(productData);
+      createMutate(productData);
     }
   };
   
-  // Verifica se alguma das mutações está em andamento
-  const isLoading = createMutation.isLoading || updateMutation.isLoading;
+  const isLoading = isCreating || isUpdating;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -109,10 +108,9 @@ export function ProductFormModal({ open, onOpenChange, productToEdit }) {
             {isEditing ? `Alterando dados de: ${productToEdit.name}` : 'Preencha os detalhes do novo produto.'}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
+        <form id="product-form" onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
-            {/* ... os inputs do formulário continuam os mesmos */}
-             <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="name" className="text-right">Nome</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="col-span-3" required />
             </div>
@@ -129,12 +127,12 @@ export function ProductFormModal({ open, onOpenChange, productToEdit }) {
               <Input id="stock" type="number" value={stock} onChange={(e) => setStock(e.target.value)} className="col-span-3" required />
             </div>
           </div>
-          <DialogFooter>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? 'Salvando...' : 'Salvar'}
-            </Button>
-          </DialogFooter>
         </form>
+        <DialogFooter>
+          <Button type="submit" form="product-form" disabled={isLoading}>
+            {isLoading ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

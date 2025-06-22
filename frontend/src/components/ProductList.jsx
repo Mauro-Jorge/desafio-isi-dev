@@ -1,12 +1,8 @@
-// Em: src/components/ProductList.jsx
-
 import React, { useState } from 'react';
-// CORREÇÃO: Importamos os hooks que faltavam
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; 
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useDebounce } from '../hooks/useDebounce';
 import { ProductFormModal } from './ProductFormModal';
-// Importamos os novos componentes
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { Trash2, Edit, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,10 +17,8 @@ async function fetchProducts({ queryKey }) {
   return response.data;
 }
 
-// Função para chamar a API de deleção
 async function deleteProduct(productId) {
-  const response = await api.delete(`/products/${productId}`);
-  return response.data;
+  await api.delete(`/products/${productId}`);
 }
 
 export function ProductList() {
@@ -34,7 +28,6 @@ export function ProductList() {
   const [productToEdit, setProductToEdit] = useState(null);
   const [productToDelete, setProductToDelete] = useState(null);
 
-  // Precisamos do queryClient para invalidar o cache após uma deleção
   const queryClient = useQueryClient();
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -44,12 +37,10 @@ export function ProductList() {
     keepPreviousData: true,
   });
 
-  // MUTAÇÃO para deletar um produto
   const deleteMutation = useMutation({
     mutationFn: deleteProduct,
     onSuccess: () => {
       console.log("Produto deletado com sucesso!");
-      // Invalida a query de 'products' para forçar a atualização da tabela
       queryClient.invalidateQueries({ queryKey: ['products'] });
     },
     onError: (error) => {
@@ -70,7 +61,7 @@ export function ProductList() {
   const handleConfirmDelete = () => {
     if (productToDelete) {
       deleteMutation.mutate(productToDelete.id);
-      setProductToDelete(null); // Fecha o modal de confirmação
+      setProductToDelete(null);
     }
   };
 
@@ -146,11 +137,9 @@ export function ProductList() {
                           <div className="flex items-center justify-end gap-2">
                             <Button variant="ghost" size="icon" onClick={() => handleEditProduct(product)}>
                               <Edit className="h-4 w-4" />
-                              <span className="sr-only">Editar</span>
                             </Button>
                             <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700" onClick={() => setProductToDelete(product)}>
                               <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Excluir</span>
                             </Button>
                           </div>
                         </td>
@@ -160,10 +149,15 @@ export function ProductList() {
                 </tbody>
               </table>
             </div>
-            
             {productPage && productPage.meta.totalPages > 1 && (
               <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-2 md:rounded-b-lg">
-                 {/* ... (lógica de paginação) ... */}
+                <div className="text-sm text-gray-700">
+                  Mostrando <span className="font-medium">{(page - 1) * 10 + 1}</span> a <span className="font-medium">{(page - 1) * 10 + productPage.data.length}</span> de <span className="font-medium">{productPage.meta.totalItems}</span> resultados
+                </div>
+                <div className="flex flex-1 justify-between sm:justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPage((old) => Math.max(old - 1, 1))} disabled={page === 1}>Anterior</Button>
+                  <Button variant="outline" size="sm" onClick={() => setPage((old) => (productPage.meta.page < productPage.meta.totalPages ? old + 1 : old))} disabled={page === productPage.meta.totalPages || !productPage.data.length}>Próxima</Button>
+                </div>
               </div>
             )}
           </div>

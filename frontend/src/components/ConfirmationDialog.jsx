@@ -25,7 +25,6 @@ export function ConfirmationDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          {/* O botão de Ação/Confirmar chama a função onConfirm passada por prop */}
           <AlertDialogAction onClick={onConfirm}>Confirmar</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
