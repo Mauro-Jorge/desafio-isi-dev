@@ -4,9 +4,11 @@ import { api } from '../lib/api';
 import { useDebounce } from '../hooks/useDebounce';
 import { ProductFormModal } from './ProductFormModal';
 import { ConfirmationDialog } from './ConfirmationDialog';
-import { Trash2, Edit, PlusCircle } from 'lucide-react';
+import { DiscountFormModal } from './DiscountFormModal';
+import { Trash2, Edit, PlusCircle, Tag, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+// --- Funções de API ---
 async function fetchProducts({ queryKey }) {
   const [_key, searchTerm, page] = queryKey;
   const params = new URLSearchParams();
@@ -21,17 +23,27 @@ async function deleteProduct(productId) {
   await api.delete(`/products/${productId}`);
 }
 
+async function removeDiscount(productId) {
+  await api.delete(`/products/${productId}/discount`);
+}
+
+
 export function ProductList() {
+  // --- Estados ---
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormModalOpen, setFormModalOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState(null);
   const [productToDelete, setProductToDelete] = useState(null);
+  const [discountingProduct, setDiscountingProduct] = useState(null);
+  const [productToRemoveDiscount, setProductToRemoveDiscount] = useState(null);
 
   const queryClient = useQueryClient();
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
+  // --- Hooks de Dados ---
   const { data: productPage, isLoading, error, isFetching } = useQuery({
+    // A 'queryKey' aqui já estava correta como um array
     queryKey: ['products', debouncedSearchTerm, page],
     queryFn: fetchProducts,
     keepPreviousData: true,
@@ -40,38 +52,45 @@ export function ProductList() {
   const deleteMutation = useMutation({
     mutationFn: deleteProduct,
     onSuccess: () => {
-      console.log("Produto deletado com sucesso!");
+      // CORREÇÃO: A sintaxe correta para invalidar queries na v4/v5
       queryClient.invalidateQueries({ queryKey: ['products'] });
     },
-    onError: (error) => {
-      alert(`Erro ao deletar produto: ${error.response?.data?.detail || error.message}`);
-    }
+    onError: (error) => alert(`Erro ao deletar produto: ${error.response?.data?.detail || error.message}`),
   });
 
+  const removeDiscountMutation = useMutation({
+    mutationFn: removeDiscount,
+    onSuccess: () => {
+      // CORREÇÃO: A sintaxe correta para invalidar queries na v4/v5
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+    onError: (error) => alert(`Erro ao remover desconto: ${error.response?.data?.detail || error.message}`),
+  });
+
+  // --- Handlers ---
   const handleAddProduct = () => {
     setProductToEdit(null);
     setFormModalOpen(true);
   };
-
   const handleEditProduct = (product) => {
     setProductToEdit(product);
     setFormModalOpen(true);
   };
-
   const handleConfirmDelete = () => {
     if (productToDelete) {
       deleteMutation.mutate(productToDelete.id);
       setProductToDelete(null);
     }
   };
-
+  const handleConfirmRemoveDiscount = () => {
+    if (productToRemoveDiscount) {
+      removeDiscountMutation.mutate(productToRemoveDiscount.id);
+      setProductToRemoveDiscount(null);
+    }
+  };
   const renderStockStatus = (stock) => {
     const isOutOfStock = stock === 0;
-    return (
-      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${isOutOfStock ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-        {isOutOfStock ? 'Esgotado' : 'Em Estoque'}
-      </span>
-    );
+    return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${isOutOfStock ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>{isOutOfStock ? 'Esgotado' : 'Em Estoque'}</span>;
   };
 
   return (
@@ -82,10 +101,7 @@ export function ProductList() {
           <p className="mt-2 text-sm text-gray-700">Gerencie e visualize todos os produtos cadastrados no sistema.</p>
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <Button onClick={handleAddProduct}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Adicionar Produto
-          </Button>
+          <Button onClick={handleAddProduct}><PlusCircle className="mr-2 h-4 w-4" />Adicionar Produto</Button>
         </div>
       </div>
 
@@ -109,12 +125,9 @@ export function ProductList() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {isLoading ? (
-                    <tr><td colSpan="4" className="p-4 text-center text-gray-500">Carregando...</td></tr>
-                  ) : error ? (
-                    <tr><td colSpan="4" className="p-4 text-center text-red-500">Ocorreu um erro: {error.message}</td></tr>
-                  ) : !productPage || productPage.data.length === 0 ? (
-                    <tr><td colSpan="4" className="p-4 text-center text-gray-500">Nenhum produto encontrado.</td></tr>
+                  {isLoading ? ( <tr><td colSpan="4" className="p-4 text-center text-gray-500">Carregando...</td></tr>
+                  ) : error ? ( <tr><td colSpan="4" className="p-4 text-center text-red-500">Ocorreu um erro: {error.message}</td></tr>
+                  ) : !productPage || productPage.data.length === 0 ? ( <tr><td colSpan="4" className="p-4 text-center text-gray-500">Nenhum produto encontrado.</td></tr>
                   ) : (
                     productPage.data.map((product) => (
                       <tr key={product.id}>
@@ -129,18 +142,23 @@ export function ProductList() {
                               <span className="line-through text-gray-400">R$ {product.price}</span>
                               <span className="ml-2 font-bold text-gray-900">R$ {product.final_price}</span>
                             </div>
-                          ) : (
-                            <span>R$ {product.price}</span>
-                          )}
+                          ) : ( <span>R$ {product.price}</span> )}
                         </td>
                         <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                           <div className="flex items-center justify-end gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditProduct(product)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700" onClick={() => setProductToDelete(product)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {product.discount ? (
+                              <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700" onClick={() => setProductToRemoveDiscount(product)}>
+                                <XCircle className="h-4 w-4" />
+                                <span className="sr-only">Remover Desconto</span>
+                              </Button>
+                            ) : (
+                              <Button variant="ghost" size="icon" className="text-slate-600 hover:text-slate-900" onClick={() => setDiscountingProduct(product)}>
+                                <Tag className="h-4 w-4" />
+                                <span className="sr-only">Aplicar Desconto</span>
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" onClick={() => handleEditProduct(product)}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700" onClick={() => setProductToDelete(product)}><Trash2 className="h-4 w-4" /></Button>
                           </div>
                         </td>
                       </tr>
@@ -164,18 +182,10 @@ export function ProductList() {
         </div>
       </div>
 
-      <ProductFormModal 
-        open={isFormModalOpen} 
-        onOpenChange={setFormModalOpen} 
-        productToEdit={productToEdit} 
-      />
-      <ConfirmationDialog 
-        open={!!productToDelete} 
-        onOpenChange={() => setProductToDelete(null)}
-        onConfirm={handleConfirmDelete}
-        title={`Excluir Produto: ${productToDelete?.name ?? ''}`}
-        description="Esta ação não pode ser desfeita. O produto será marcado como inativo."
-      />
+      <ProductFormModal open={isFormModalOpen} onOpenChange={setFormModalOpen} productToEdit={productToEdit} />
+      <ConfirmationDialog open={!!productToDelete} onOpenChange={() => setProductToDelete(null)} onConfirm={handleConfirmDelete} title={`Excluir Produto: ${productToDelete?.name ?? ''}`} description="Esta ação marcará o produto como inativo." />
+      <ConfirmationDialog open={!!productToRemoveDiscount} onOpenChange={() => setProductToRemoveDiscount(null)} onConfirm={handleConfirmRemoveDiscount} title={`Remover Desconto de: ${productToRemoveDiscount?.name ?? ''}`} description="Você tem certeza que deseja remover o desconto ativo deste produto?" />
+      {discountingProduct && ( <DiscountFormModal open={!!discountingProduct} onOpenChange={() => setDiscountingProduct(null)} product={discountingProduct} /> )}
     </div>
   );
 }

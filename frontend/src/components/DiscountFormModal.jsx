@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from '../lib/api';
 
-// Funções de API
+// Funções que chamam a API
 async function applyPercentDiscount({ productId, value }) {
   const { data } = await api.post(`/products/${productId}/discount/percent`, { value });
   return data;
@@ -30,21 +30,25 @@ export function DiscountFormModal({ open, onOpenChange, product }) {
     onOpenChange(false);
   };
 
-  const percentMutation = useMutation(applyPercentDiscount, {
+  const percentMutation = useMutation({
+    mutationFn: applyPercentDiscount,
     onSuccess: onMutationSuccess,
     onError: (error) => alert(`Erro: ${error.response?.data?.detail || error.message}`),
   });
 
-  const couponMutation = useMutation(applyCouponDiscount, {
+  const couponMutation = useMutation({
+    mutationFn: applyCouponDiscount,
     onSuccess: onMutationSuccess,
     onError: (error) => alert(`Erro: ${error.response?.data?.detail || error.message}`),
   });
 
-  const handleApplyPercent = () => {
+  const handleApplyPercent = (e) => {
+    e.preventDefault();
     percentMutation.mutate({ productId: product.id, value: parseFloat(percentValue) });
   };
 
-  const handleApplyCoupon = () => {
+  const handleApplyCoupon = (e) => {
+    e.preventDefault();
     couponMutation.mutate({ productId: product.id, code: couponCode });
   };
   
@@ -56,7 +60,7 @@ export function DiscountFormModal({ open, onOpenChange, product }) {
         <DialogHeader>
           <DialogTitle>Aplicar Desconto</DialogTitle>
           <DialogDescription>
-            Aplique um desconto no produto: <span className="font-bold">{product?.name}</span>
+            Aplicando desconto no produto: <span className="font-bold">{product?.name}</span>
           </DialogDescription>
         </DialogHeader>
 
@@ -65,35 +69,37 @@ export function DiscountFormModal({ open, onOpenChange, product }) {
             <TabsTrigger value="percent">Percentual</TabsTrigger>
             <TabsTrigger value="coupon">Cupom</TabsTrigger>
           </TabsList>
-
-          {/* Aba de Desconto Percentual */}
+          
           <TabsContent value="percent">
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="percent" className="text-right">Valor (%)</Label>
-                <Input id="percent" type="number" value={percentValue} onChange={(e) => setPercentValue(e.target.value)} className="col-span-3" placeholder="Ex: 15" />
+            <form onSubmit={handleApplyPercent}>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="percent" className="text-right">Valor (%)</Label>
+                  <Input id="percent" type="number" value={percentValue} onChange={(e) => setPercentValue(e.target.value)} className="col-span-3" placeholder="Ex: 15" />
+                </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleApplyPercent} disabled={isLoading}>
-                {isLoading ? 'Aplicando...' : 'Aplicar Desconto'}
-              </Button>
-            </DialogFooter>
+              <DialogFooter>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Aplicando...' : 'Aplicar Desconto'}
+                </Button>
+              </DialogFooter>
+            </form>
           </TabsContent>
 
-          {/* Aba de Desconto por Cupom */}
           <TabsContent value="coupon">
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="coupon" className="text-right">Código</Label>
-                <Input id="coupon" value={couponCode} onChange={(e) => setCouponCode(e.target.value)} className="col-span-3" placeholder="Ex: PROMO10" />
+            <form onSubmit={handleApplyCoupon}>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="coupon" className="text-right">Código</Label>
+                  <Input id="coupon" value={couponCode} onChange={(e) => setCouponCode(e.target.value)} className="col-span-3" placeholder="Ex: PROMO10" />
+                </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleApplyCoupon} disabled={isLoading}>
-                {isLoading ? 'Aplicando...' : 'Aplicar Cupom'}
-              </Button>
-            </DialogFooter>
+              <DialogFooter>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Aplicando...' : 'Aplicar Cupom'}
+                </Button>
+              </DialogFooter>
+            </form>
           </TabsContent>
         </Tabs>
       </DialogContent>
